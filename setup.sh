@@ -153,7 +153,9 @@ setup_starship() {
     fi
 
     log "INFO" "Installing Starship..."
-    curl -sS "$STARSHIP_INSTALL_URL" | sh || error_exit "Failed to install Starship"
+    curl -sS "$STARSHIP_INSTALL_URL" >> starship_install.sh
+    bash --posix starship_install.sh
+    rm -rf starship_install.sh
     log "SUCCESS" "Starship installed successfully"
 }
 
@@ -244,12 +246,13 @@ install_yazi_binary() {
     curl -L "$YAZI_RELEASE_URL" -o "$tmp_dir/yazi.tar.gz" || \
         error_exit "Failed to download Yazi"
     
-    tar xf "$tmp_dir/yazi.tar.gz" -C "$tmp_dir" || \
+    chmod 744 $tmp_dir/yazi.tar.gz
+    unzip "$tmp_dir/yazi.tar.gz" -d "$tmp_dir" || \
         error_exit "Failed to extract Yazi"
-    
-    sudo mv "$tmp_dir/yazi" /usr/local/bin/ || error_exit "Failed to install Yazi binary"
-    sudo mv "$tmp_dir/ya" /usr/local/bin/ || error_exit "Failed to install Ya binary"
-    
+
+    mv "$tmp_dir/yazi-x86_64-unknown-linux-gnu/yazi" /usr/local/bin/ || error_exit "Failed to install Yazi binary"
+    mv "$tmp_dir/yazi-x86_64-unknown-linux-gnu/ya" /usr/local/bin/ || error_exit "Failed to install Ya binary"
+
     rm -rf "$tmp_dir"
     log "SUCCESS" "Yazi installed successfully"
 }
