@@ -181,15 +181,101 @@ fi
 EOL
 }
 
-# Main execution
+# Install fzf if not present
+install_fzf() {
+    if ! command_exists fzf; then
+        print_status "Installing fzf..."
+        if command_exists apt; then
+            sudo apt update && sudo apt install -y fzf
+        elif command_exists dnf; then
+            sudo dnf install -y fzf
+        elif command_exists brew; then
+            brew install fzf
+        else
+            echo -e "${RED}Error: Package manager not found. Please install fzf manually.${NC}"
+            exit 1
+        fi
+    fi
+}
+
+# Function to setup Catppuccin theme for Yazi
+setup_yazi_theme() {
+    print_status "Setting up Catppuccin theme for Yazi..."
+    
+    # Create Yazi config directory
+    mkdir -p ~/.config/yazi
+    
+    # Create theme.toml
+    cat > ~/.config/yazi/theme.toml << 'EOL'
+[flavor]
+dark = "catppuccin-mocha"
+light = "catppuccin-mocha"
+EOL
+
+    # Install the Catppuccin theme using Yazi's package manager
+    if command_exists ya; then
+        ya pack -a yazi-rs/flavors:catppuccin-mocha
+    fi
+}
+
+# Function to install Yazi
+setup_yazi() {
+    print_status "Setting up Yazi file manager..."
+    
+    if command_exists brew; then
+        # macOS installation
+        brew install yazi
+    else
+        # Ubuntu/Debian installation
+        print_status "Installing Yazi dependencies..."
+        sudo apt update && sudo apt install -y \
+            ffmpeg \
+            p7zip-full \
+            jq \
+            poppler-utils \
+            fd-find \
+            ripgrep \
+            fzf \
+            zoxide \
+            imagemagick
+
+        # Create temporary directory for download
+        local tmp_dir=$(mktemp -d)
+        
+        # Download latest Yazi release for Ubuntu (x86_64)
+        curl -L https://github.com/sxyazi/yazi/releases/latest/download/yazi-x86_64-unknown-linux-gnu.tar.gz -o "$tmp_dir/yazi.tar.gz"
+        
+        # Extract the binary
+        tar xf "$tmp_dir/yazi.tar.gz" -C "$tmp_dir"
+        
+        # Move yazi binary to /usr/local/bin
+        sudo mv "$tmp_dir/yazi" /usr/local/bin/
+        sudo mv "$tmp_dir/ya" /usr/local/bin/
+        
+        # Cleanup
+        rm -rf "$tmp_dir"
+    fi
+
+    # Setup the theme
+    setup_yazi_theme
+}
+
+# Main execution with interactive menu
 main() {
     print_status "Starting development environment setup..."
+    install_fzf
 
-    setup_zsh
-    setup_starship
-    setup_zsh_extensions
-    setup_zshrc
-    setup_tmux
+    # Define options
+    options=("ZSH" "Starship" "ZSH Extensions" "tmux" "Yazi")
+
+    # Use fzf to create a checkbox menu
+    selected_options=$(printf '%s\n' "${options[@]}" | fzf --multi --ansi --prompt "Select components to install: ")
+
+    [[ "$selected_options" =~ "ZSH" ]] && setup_zsh
+    [[ "$selected_options" =~ "Starship" ]] && setup_starship
+    [[ "$selected_options" =~ "ZSH Extensions" ]] && setup_zsh_extensions
+    [[ "$selected_options" =~ "tmux" ]] && setup_tmux
+    [[ "$selected_options" =~ "Yazi" ]] && setup_yazi
 
     print_status "All done! Restart your shell for the changes to take effect."
 }
