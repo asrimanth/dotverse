@@ -154,8 +154,8 @@ setup_starship() {
 
     log "INFO" "Installing Starship..."
     curl -sS "$STARSHIP_INSTALL_URL" >> starship_install.sh
-    bash --posix starship_install.sh
-    rm -rf starship_install.sh
+    bash --posix dotverse_starship_rs_latest_install.sh
+    rm -rf dotverse_starship_rs_latest_install.sh
     log "SUCCESS" "Starship installed successfully"
 }
 
