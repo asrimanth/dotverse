@@ -207,6 +207,7 @@ setup_yazi() {
         log "INFO" "Yazi is already installed"
     else
         if command_exists brew; then
+            brew install ffmpeg sevenzip jq poppler fd ripgrep fzf zoxide imagemagick font-symbols-only-nerd-font
             install_package "yazi"
         else
             install_yazi_dependencies
