@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 # Script constants
 readonly SCRIPT_VERSION="1.0.0"
@@ -9,13 +9,19 @@ readonly RED='\033[0;31m'
 readonly GREEN='\033[0;32m'
 readonly YELLOW='\033[1;33m'
 readonly NC='\033[0m' # No Color
+readonly CHECK_MARK="✓"
+
+# Add these variables near the top of the script with other readonly variables
+readonly APT_UPDATED_FLAG="/tmp/apt_updated_${USER}"
 
 # URLs
 readonly STARSHIP_INSTALL_URL="https://starship.rs/install.sh"
+
 readonly STARSHIP_PRESET_URLS=(
     "https://starship.rs/presets/toml/gruvbox-rainbow.toml"
     "https://starship.rs/presets/toml/tokyo-night.toml"
 )
+
 readonly STARSHIP_PRESET_NAMES=(
     "gruvbox-rainbow.toml"
     "tokyo-night.toml"
@@ -24,7 +30,7 @@ readonly STARSHIP_PRESET_NAMES=(
 # Repository URLs
 readonly ZSH_AUTOSUGGESTIONS_URL="https://github.com/zsh-users/zsh-autosuggestions"
 readonly ZSH_SYNTAX_HIGHLIGHTING_URL="https://github.com/zsh-users/zsh-syntax-highlighting.git"
-readonly YAZI_RELEASE_URL="https://github.com/sxyazi/yazi/releases/latest/download/yazi-x86_64-unknown-linux-gnu.tar.gz"
+readonly YAZI_RELEASE_URL="https://github.com/sxyazi/yazi/releases/download/v0.4.2/yazi-x86_64-unknown-linux-gnu.zip"
 
 # Directory constants
 readonly ZSH_DIR="${HOME}/.zsh"
@@ -32,13 +38,57 @@ readonly STARSHIP_DIR="${HOME}/.starship"
 readonly CONFIG_DIR="${HOME}/.config"
 readonly YAZI_CONFIG_DIR="${CONFIG_DIR}/yazi"
 
-# Log levels
-# declare -A LOG_LEVELS=( 
-#     ["ERROR"]=0
-#     ["WARNING"]=1
-#     ["INFO"]=2
-#     ["SUCCESS"]=3
-# )
+# Component status checking functions
+check_zsh_status() {
+    if command_exists zsh; then
+        if [[ $SHELL == *"zsh"* ]]; then
+            echo "${CHECK_MARK} ZSH Shell (Installed & Default)"
+        else
+            echo "${CHECK_MARK} ZSH Shell (Installed but not Default)"
+        fi
+    else
+        echo "ZSH Shell"
+    fi
+}
+
+check_starship_status() {
+    if command_exists starship; then
+        echo "${CHECK_MARK} Starship Prompt (Modern shell prompt)"
+    else
+        echo "Starship Prompt (Modern shell prompt)"
+    fi
+}
+
+check_zsh_extensions_status() {
+    local installed=true
+    
+    if ! directory_exists_and_populated "${ZSH_DIR}/zsh-autosuggestions" || \
+       ! directory_exists_and_populated "${ZSH_DIR}/zsh-syntax-highlighting"; then
+        installed=false
+    fi
+    
+    if [ "$installed" = true ]; then
+        echo "${CHECK_MARK} ZSH Extensions (Autosuggestions & Syntax Highlighting)"
+    else
+        echo "ZSH Extensions (Autosuggestions & Syntax Highlighting)"
+    fi
+}
+
+check_tmux_status() {
+    if command_exists tmux; then
+        echo "${CHECK_MARK} Tmux (Terminal Multiplexer)"
+    else
+        echo "Tmux (Terminal Multiplexer)"
+    fi
+}
+
+check_yazi_status() {
+    if command_exists yazi; then
+        echo "${CHECK_MARK} Yazi (Modern File Manager)"
+    else
+        echo "Yazi (Modern File Manager)"
+    fi
+}
 
 # Logging functions
 log() {
@@ -94,47 +144,72 @@ detect_package_manager() {
     fi
 }
 
-# Package installation
-install_package() {
-    local package=$1
+# Function to safely update package manager
+update_package_manager() {
     local package_manager=$(detect_package_manager)
     
-    if command_exists "$package"; then
+    case $package_manager in
+        "apt")
+            if [ ! -f "$APT_UPDATED_FLAG" ]; then
+                log "INFO" "Updating apt package lists..."
+                sudo apt update || error_exit "Failed to update apt package lists"
+                touch "$APT_UPDATED_FLAG"
+            fi
+            ;;
+        "dnf")
+            # DNF handles its own caching, no explicit update needed
+            ;;
+        "brew")
+            # Homebrew handles its own caching, no explicit update needed
+            ;;
+    esac
+}
+
+
+
+# Modified install_package function
+install_package() {
+    local package=$1
+    local force_reinstall=${2:-false}
+    local package_manager=$(detect_package_manager)
+    
+    if command_exists "$package" && [ "$force_reinstall" = false ]; then
         log "INFO" "$package is already installed"
         return 0
     fi
 
-    log "INFO" "Installing $package..."
+    if [ "$force_reinstall" = true ]; then
+        log "INFO" "Reinstalling $package..."
+    else
+        log "INFO" "Installing $package..."
+    fi
+
+    # Ensure package manager is updated before installation
+    update_package_manager
+
     case $package_manager in
         "apt")
-            sudo apt update && sudo apt install -y "$package" || error_exit "Failed to install $package"
+            sudo apt install --reinstall -y "$package" || error_exit "Failed to install $package"
             ;;
         "dnf")
-            sudo dnf install -y "$package" || error_exit "Failed to install $package"
+            sudo dnf reinstall -y "$package" || error_exit "Failed to install $package"
             ;;
         "brew")
-            brew install "$package" || error_exit "Failed to install $package"
+            brew reinstall "$package" || error_exit "Failed to install $package"
             ;;
     esac
     
     log "SUCCESS" "$package installed successfully"
 }
 
-# Backup file if it exists
-backup_file() {
-    local file=$1
-    if [ -f "$file" ]; then
-        log "INFO" "Backing up existing $file..."
-        mv "$file" "${file}.backup" || error_exit "Failed to backup $file"
-        log "SUCCESS" "Backup created: ${file}.backup"
-    fi
-}
 
+# Rest of the functions remain the same, but add force_reinstall parameter
 setup_zsh() {
-    if command_exists zsh; then
+    local force_reinstall=${1:-false}
+    if command_exists zsh && [ "$force_reinstall" = false ]; then
         log "INFO" "ZSH is already installed"
     else
-        install_package "zsh"
+        install_package "zsh" "$force_reinstall"
     fi
 
     if [[ $SHELL != *"zsh"* ]]; then
@@ -147,25 +222,38 @@ setup_zsh() {
 }
 
 setup_starship() {
-    if command_exists starship; then
+    local force_reinstall=${1:-false}
+    if command_exists starship && [ "$force_reinstall" = false ]; then
         log "INFO" "Starship is already installed"
         return 0
     fi
 
-    log "INFO" "Installing Starship..."
-    curl -sS "$STARSHIP_INSTALL_URL" >> starship_install.sh
+    if [ "$force_reinstall" = true ]; then
+        log "INFO" "Reinstalling Starship..."
+    else
+        log "INFO" "Installing Starship..."
+    fi
+
+    curl -sS "$STARSHIP_INSTALL_URL" >> dotverse_starship_rs_latest_install.sh
     bash --posix dotverse_starship_rs_latest_install.sh
     rm -rf dotverse_starship_rs_latest_install.sh
     log "SUCCESS" "Starship installed successfully"
 }
 
 setup_zsh_extensions() {
+    local force_reinstall=${1:-false}
     log "SUCCESS" "Setting up ZSH extensions..."
     
     mkdir -p "$ZSH_DIR"
 
+    # Handle reinstallation by removing existing directories if force_reinstall is true
+    if [ "$force_reinstall" = true ]; then
+        rm -rf "${ZSH_DIR}/zsh-autosuggestions"
+        rm -rf "${ZSH_DIR}/zsh-syntax-highlighting"
+    fi
+
     # Install/update zsh-autosuggestions
-    if directory_exists_and_populated "${ZSH_DIR}/zsh-autosuggestions"; then
+    if directory_exists_and_populated "${ZSH_DIR}/zsh-autosuggestions" && [ "$force_reinstall" = false ]; then
         log "INFO" "zsh-autosuggestions is already installed"
     else
         git clone "$ZSH_AUTOSUGGESTIONS_URL" "${ZSH_DIR}/zsh-autosuggestions" || \
@@ -174,7 +262,7 @@ setup_zsh_extensions() {
     fi
 
     # Install/update zsh-syntax-highlighting
-    if directory_exists_and_populated "${ZSH_DIR}/zsh-syntax-highlighting"; then
+    if directory_exists_and_populated "${ZSH_DIR}/zsh-syntax-highlighting" && [ "$force_reinstall" = false ]; then
         log "INFO" "zsh-syntax-highlighting is already installed"
     else
         git clone "$ZSH_SYNTAX_HIGHLIGHTING_URL" "${ZSH_DIR}/zsh-syntax-highlighting" || \
@@ -183,36 +271,62 @@ setup_zsh_extensions() {
     fi
 }
 
-setup_tmux() {
-    log "SUCCESS" "Setting up tmux configuration..."
+# Add this function near the other utility functions
+backup_file() {
+    local file="$1"
+    if [ -f "$file" ]; then
+        local backup="${file}.backup.$(date +%Y%m%d_%H%M%S)"
+        cp "$file" "$backup" || error_exit "Failed to create backup of $file"
+        log "INFO" "Created backup of $file at $backup"
+    fi
+}
 
-    if command_exists tmux; then
+setup_tmux() {
+    local force_reinstall=${1:-false}
+    log "INFO" "Setting up tmux..."
+
+    # Install tmux package
+    if command_exists tmux && [ "$force_reinstall" = false ]; then
         log "INFO" "tmux is already installed"
     else
-        install_package "tmux"
+        install_package "tmux" "$force_reinstall"
+        
+        # Verify installation
+        if ! command_exists tmux; then
+            error_exit "tmux installation failed"
+        fi
     fi
 
-    # Backup and update tmux configuration
-    backup_file "${HOME}/.tmux.conf"
-    
+    # Handle tmux configuration
     if [ -f "./.tmux.conf" ]; then
+        # Backup existing configuration if it exists
+        backup_file "${HOME}/.tmux.conf"
+        
+        # Copy new configuration
         cp "./.tmux.conf" "${HOME}/.tmux.conf" || error_exit "Failed to copy tmux configuration"
         log "SUCCESS" "tmux configuration updated"
     else
-        log "WARNING" ".tmux.conf not found in current directory. Please add ./tmux.conf manually to ${HOME}/.tmux.conf"
+        log "WARNING" "No .tmux.conf found in current directory"
     fi
 }
+
 setup_yazi() {
+    local force_reinstall=${1:-false}
     log "SUCCESS" "Setting up Yazi file manager..."
     
-    if command_exists yazi; then
+    if command_exists yazi && [ "$force_reinstall" = false ]; then
         log "INFO" "Yazi is already installed"
     else
         if command_exists brew; then
-            brew install ffmpeg sevenzip jq poppler fd ripgrep fzf zoxide imagemagick font-symbols-only-nerd-font
-            install_package "yazi"
+            if [ "$force_reinstall" = true ]; then
+                brew reinstall ffmpeg sevenzip jq poppler fd ripgrep fzf zoxide imagemagick font-symbols-only-nerd-font
+                install_package "yazi" true
+            else
+                brew install ffmpeg sevenzip jq poppler fd ripgrep fzf zoxide imagemagick font-symbols-only-nerd-font
+                install_package "yazi"
+            fi
         else
-            install_yazi_dependencies
+            install_yazi_dependencies "$force_reinstall"
             install_yazi_binary
         fi
     fi
@@ -250,8 +364,8 @@ install_yazi_binary() {
     unzip "$tmp_dir/yazi.tar.gz" -d "$tmp_dir" || \
         error_exit "Failed to extract Yazi"
 
-    mv "$tmp_dir/yazi-x86_64-unknown-linux-gnu/yazi" /usr/local/bin/ || error_exit "Failed to install Yazi binary"
-    mv "$tmp_dir/yazi-x86_64-unknown-linux-gnu/ya" /usr/local/bin/ || error_exit "Failed to install Ya binary"
+    sudo mv "$tmp_dir/yazi-x86_64-unknown-linux-gnu/yazi" /usr/local/bin/ || error_exit "Failed to install Yazi binary"
+    sudo mv "$tmp_dir/yazi-x86_64-unknown-linux-gnu/ya" /usr/local/bin/ || error_exit "Failed to install Ya binary"
 
     rm -rf "$tmp_dir"
     log "SUCCESS" "Yazi installed successfully"
@@ -358,30 +472,72 @@ install_fzf() {
     install_package "fzf"
 }
 
+
 main() {
+    # Remove any existing apt update flag at the start
+    rm -f "$APT_UPDATED_FLAG"
+
     log "INFO" "Starting development environment setup (v${SCRIPT_VERSION})..."
     
     # Install fzf first as it's needed for the menu
-    install_fzf
+    install_package "fzf"
 
-    # Define options
-    local options=("ZSH" "Starship" "ZSH Extensions" "tmux" "Yazi")
+    # Define options with status checks
+    local options=(
+        "$(check_zsh_status)"
+        "$(check_starship_status)"
+        "$(check_zsh_extensions_status)"
+        "$(check_tmux_status)"
+        "$(check_yazi_status)"
+    )
 
-    # Use fzf to create a checkbox menu
-    local selected_options=$(printf '%s\n' "${options[@]}" | \
+    # Debug: Print available options
+    log "DEBUG" "Available options:"
+    printf '%s\n' "${options[@]}"
+
+    # Create temporary file for fzf output
+    local tmp_file=$(mktemp)
+
+    # Run fzf and save output
+    printf '%s\n' "${options[@]}" | \
         fzf --multi --ansi --layout=reverse --bind "space:toggle" \
-        --header 'Use Space to select/deselect. Confirm with ENTER. Press Ctrl+C or ESC to exit.' \
-            --prompt "Select components to install: ")
+        --header 'Use Space to select/deselect. Press Enter to confirm. Selected items with ✓ will be reinstalled.' \
+        --prompt "Select components to install/reinstall: " > "$tmp_file"
 
-    [[ "$selected_options" =~ "ZSH" ]] && setup_zsh
-    [[ "$selected_options" =~ "Starship" ]] && setup_starship
-    [[ "$selected_options" =~ "ZSH Extensions" ]] && setup_zsh_extensions
-    [[ "$selected_options" =~ "tmux" ]] && setup_tmux
-    [[ "$selected_options" =~ "Yazi" ]] && setup_yazi
+    # Read selections from temp file
+    local selected_options=$(<"$tmp_file")
+    rm -f "$tmp_file"
+
+    # Debug: Print selections
+    log "DEBUG" "Selected options:"
+    echo "$selected_options"
+
+    # Process selections with case-insensitive matching
+    if echo "$selected_options" | grep -qi "Tmux"; then
+        log "DEBUG" "Tmux selected for installation"
+        local force_reinstall=$(echo "$selected_options" | grep -q "^${CHECK_MARK}" && echo true || echo false)
+        log "DEBUG" "force_reinstall value: $force_reinstall"
+        setup_tmux "$force_reinstall"
+    fi
+
+    if echo "$selected_options" | grep -q "ZSH Shell"; then
+        setup_zsh "$(echo "$selected_options" | grep -q "^${CHECK_MARK}" && echo true || echo false)"
+    fi
+
+    if echo "$selected_options" | grep -q "Starship Prompt"; then
+        setup_starship "$(echo "$selected_options" | grep -q "^${CHECK_MARK}" && echo true || echo false)"
+    fi
+
+    if echo "$selected_options" | grep -q "ZSH Extensions"; then
+        setup_zsh_extensions "$(echo "$selected_options" | grep -q "^${CHECK_MARK}" && echo true || echo false)"
+    fi
+
+    if echo "$selected_options" | grep -q "Yazi"; then
+        setup_yazi "$(echo "$selected_options" | grep -q "^${CHECK_MARK}" && echo true || echo false)"
+    fi
 
     # Always set up zshrc after all components are installed
-    if [[ "$selected_options" =~ "ZSH" ]] || [[ "$selected_options" =~ "Starship" ]] || \
-       [[ "$selected_options" =~ "ZSH Extensions" ]]; then
+    if echo "$selected_options" | grep -qE "ZSH Shell|Starship Prompt|ZSH Extensions"; then
         setup_zshrc
     fi
 
