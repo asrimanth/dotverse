@@ -34,7 +34,7 @@ readonly YAZI_RELEASE_URL="https://github.com/sxyazi/yazi/releases/download/v0.4
 
 # Directory constants
 readonly ZSH_DIR="${HOME}/.zsh"
-readonly STARSHIP_DIR="${HOME}/.starship"
+readonly STARSHIP_DIR="${HOME}/.config/starship"
 readonly CONFIG_DIR="${HOME}/.config"
 readonly YAZI_CONFIG_DIR="${CONFIG_DIR}/yazi"
 
@@ -396,12 +396,12 @@ EOL
 }
 
 download_starship_presets() {
-    mkdir -p "${STARSHIP_DIR}/presets"
+    mkdir -p "${STARSHIP_DIR}"
     
     local index=0
     for url in "${STARSHIP_PRESET_URLS[@]}"; do
         local preset_name="${STARSHIP_PRESET_NAMES[$index]}"
-        local preset_path="${STARSHIP_DIR}/presets/${preset_name}"
+        local preset_path="${STARSHIP_DIR}/${preset_name}"
         
         if [ -f "$preset_path" ]; then
             log "INFO" "Preset $preset_name already exists"
@@ -421,7 +421,8 @@ download_starship_presets() {
 setup_zshrc() {
     log "SUCCESS" "Setting up zshrc configuration..."
     
-    mkdir -p "${STARSHIP_DIR}/presets"
+    mkdir -p "${STARSHIP_DIR}"
+    cp gruvbox-custom.toml "$STARSHIP_DIR"
 
     backup_file "${HOME}/.zshrc"
     download_starship_presets
@@ -431,7 +432,7 @@ setup_zshrc() {
 eval "$(starship init zsh)"
 
 # Starship preset
-export STARSHIP_CONFIG=~/.starship/presets/gruvbox-rainbow.toml
+export STARSHIP_CONFIG=~/.config/starship/gruvbox-custom.toml
 
 # Source ZSH extensions
 source ~/.zsh/zsh-autosuggestions/zsh-autosuggestions.zsh
