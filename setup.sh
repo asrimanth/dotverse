@@ -38,6 +38,11 @@ readonly STARSHIP_DIR="${HOME}/.config/starship"
 readonly CONFIG_DIR="${HOME}/.config"
 readonly YAZI_CONFIG_DIR="${CONFIG_DIR}/yazi"
 
+# Check if running as root
+is_root_user() {
+    [ "$(id -u)" -eq 0 ]
+}
+
 # Component status checking functions
 check_zsh_status() {
     if command_exists zsh; then
@@ -90,6 +95,22 @@ check_yazi_status() {
     fi
 }
 
+check_go_status() {
+    if command_exists go; then
+        echo "${CHECK_MARK} Go (Go programming language)"
+    else
+        echo "Go (Go programming language)"
+    fi
+}
+
+check_nvtop_status() {
+    if command_exists nvtop; then
+        echo "${CHECK_MARK} nvtop (Nvidia GPU monitoring)"
+    else
+        echo "nvtop (Nvidia GPU monitoring)"
+    fi
+}
+
 # Logging functions
 log() {
     local level=$1
@@ -104,7 +125,7 @@ log() {
         *)         color=$NC ;;
     esac
 
-    echo -e "${color}[${level}] ${message}${NC}"
+    echo "${color}[${level}] ${message}${NC}"
 }
 
 # Error handling
@@ -135,12 +156,10 @@ check_url() {
 detect_package_manager() {
     if command_exists apt; then
         echo "apt"
-    elif command_exists dnf; then
-        echo "dnf"
     elif command_exists brew; then
         echo "brew"
     else
-        error_exit "No supported package manager found (apt, dnf, or brew)"
+        error_exit "No supported package manager found (apt, or brew)"
     fi
 }
 
@@ -152,19 +171,19 @@ update_package_manager() {
         "apt")
             if [ ! -f "$APT_UPDATED_FLAG" ]; then
                 log "INFO" "Updating apt package lists..."
-                sudo apt update || error_exit "Failed to update apt package lists"
+                if is_root_user; then
+                    apt update || error_exit "Failed to update apt package lists"
+                else
+                    sudo apt update || error_exit "Failed to update apt package lists"
+                fi
                 touch "$APT_UPDATED_FLAG"
             fi
-            ;;
-        "dnf")
-            # DNF handles its own caching, no explicit update needed
             ;;
         "brew")
             # Homebrew handles its own caching, no explicit update needed
             ;;
     esac
 }
-
 
 
 # Modified install_package function
@@ -189,10 +208,11 @@ install_package() {
 
     case $package_manager in
         "apt")
-            sudo apt install --reinstall -y "$package" || error_exit "Failed to install $package"
-            ;;
-        "dnf")
-            sudo dnf reinstall -y "$package" || error_exit "Failed to install $package"
+            if is_root_user; then
+                apt install --reinstall -y "$package" || error_exit "Failed to install $package"
+            else
+                sudo apt install --reinstall -y "$package" || error_exit "Failed to install $package"
+            fi
             ;;
         "brew")
             brew reinstall "$package" || error_exit "Failed to install $package"
@@ -223,6 +243,7 @@ setup_zsh() {
 
 setup_starship() {
     local force_reinstall=${1:-false}
+
     if command_exists starship && [ "$force_reinstall" = false ]; then
         log "INFO" "Starship is already installed"
         return 0
@@ -234,9 +255,22 @@ setup_starship() {
         log "INFO" "Installing Starship..."
     fi
 
-    curl -sS "$STARSHIP_INSTALL_URL" >> dotverse_starship_rs_latest_install.sh
-    bash --posix dotverse_starship_rs_latest_install.sh
-    rm -rf dotverse_starship_rs_latest_install.sh
+    if command_exists brew; then
+        # Use brew to install Starship if it is available
+        log "INFO" "Homebrew detected, using brew to install Starship"
+        if [ "$force_reinstall" = true ]; then
+            brew reinstall starship || error_exit "Failed to reinstall Starship using Homebrew"
+        else
+            brew install starship || error_exit "Failed to install Starship using Homebrew"
+        fi
+    else
+        # Fallback to Starship's installation script if brew is not available
+        log "INFO" "Homebrew not detected, using curl to install Starship"
+        curl -sS "$STARSHIP_INSTALL_URL" >> dotverse_starship_rs_latest_install.sh
+        bash --posix dotverse_starship_rs_latest_install.sh || error_exit "Failed to install Starship using installation script"
+        rm -rf dotverse_starship_rs_latest_install.sh
+    fi
+
     log "SUCCESS" "Starship installed successfully"
 }
 
@@ -360,17 +394,25 @@ install_yazi_binary() {
     curl -L "$YAZI_RELEASE_URL" -o "$tmp_dir/yazi.tar.gz" || \
         error_exit "Failed to download Yazi"
     
-    chmod 744 $tmp_dir/yazi.tar.gz
+    chmod 744 "$tmp_dir/yazi.tar.gz"
     unzip "$tmp_dir/yazi.tar.gz" -d "$tmp_dir" || \
         error_exit "Failed to extract Yazi"
 
-    sudo mv "$tmp_dir/yazi-x86_64-unknown-linux-gnu/yazi" /usr/local/bin/ || error_exit "Failed to install Yazi binary"
-    sudo mv "$tmp_dir/yazi-x86_64-unknown-linux-gnu/ya" /usr/local/bin/ || error_exit "Failed to install Ya binary"
+    if is_root_user; then
+        mv "$tmp_dir/yazi-x86_64-unknown-linux-gnu/yazi" /usr/local/bin/ || \
+            error_exit "Failed to install Yazi binary"
+        mv "$tmp_dir/yazi-x86_64-unknown-linux-gnu/ya" /usr/local/bin/ || \
+            error_exit "Failed to install Ya binary"
+    else
+        sudo mv "$tmp_dir/yazi-x86_64-unknown-linux-gnu/yazi" /usr/local/bin/ || \
+            error_exit "Failed to install Yazi binary"
+        sudo mv "$tmp_dir/yazi-x86_64-unknown-linux-gnu/ya" /usr/local/bin/ || \
+            error_exit "Failed to install Ya binary"
+    fi
 
     rm -rf "$tmp_dir"
     log "SUCCESS" "Yazi installed successfully"
 }
-
 setup_yazi_theme() {
     log "SUCCESS" "Setting up Catppuccin theme for Yazi..."
     
@@ -473,6 +515,112 @@ install_fzf() {
     install_package "fzf"
 }
 
+setup_go() {
+    local force_reinstall=${1:-false}
+    
+    log "INFO" "Setting up Go programming language..."
+    
+    # Check if Go is already installed
+    if command_exists go && [ "$force_reinstall" = false ]; then
+        log "INFO" "Go is already installed"
+        return 0
+    fi
+
+    # Detect package manager and install Go
+    local package_manager=$(detect_package_manager)
+
+    case $package_manager in
+        "brew")
+            log "INFO" "Using Homebrew to install Go"
+            if [ "$force_reinstall" = true ]; then
+                brew reinstall go || error_exit "Failed to reinstall Go using Homebrew"
+            else
+                brew install go || error_exit "Failed to install Go using Homebrew"
+            fi
+            ;;
+
+        "apt")
+            log "INFO" "Using apt to install Go"
+            update_package_manager
+
+            # Install necessary tools and add Go repository
+            install_package "software-properties-common" "$force_reinstall"
+            if [ "$force_reinstall" = true ]; then
+                sudo add-apt-repository --remove ppa:longsleep/golang-backports || true
+            fi
+            sudo add-apt-repository ppa:longsleep/golang-backports -y || \
+                error_exit "Failed to add Go PPA repository"
+
+            update_package_manager
+
+            # Install Go
+            if is_root_user; then
+                apt install -y golang-go || error_exit "Failed to install Go using apt"
+            else
+                sudo apt install -y golang-go || error_exit "Failed to install Go using apt"
+            fi
+            ;;
+
+        *)
+            error_exit "Unsupported package manager for Go installation"
+            ;;
+    esac
+
+    # Verify installation
+    if command_exists go; then
+        log "SUCCESS" "Go installed successfully"
+    else
+        error_exit "Go installation failed"
+    fi
+}
+
+setup_nvtop() {
+    local force_reinstall=${1:-false}
+    
+    log "INFO" "Setting up nvtop (Nvidia GPU monitoring tool)..."
+
+    # Check if nvtop is already installed
+    if command_exists nvtop && [ "$force_reinstall" = false ]; then
+        log "INFO" "nvtop is already installed"
+        return 0
+    fi
+
+    # Detect package manager and install nvtop
+    local package_manager=$(detect_package_manager)
+
+    case $package_manager in
+        "brew")
+            log "INFO" "Using Homebrew to install nvtop"
+            if [ "$force_reinstall" = true ]; then
+                brew reinstall nvtop || error_exit "Failed to reinstall nvtop using Homebrew"
+            else
+                brew install nvtop || error_exit "Failed to install nvtop using Homebrew"
+            fi
+            ;;
+
+        "apt")
+            log "INFO" "Using apt to install nvtop"
+            update_package_manager
+            if is_root_user; then
+                apt install -y nvtop || error_exit "Failed to install nvtop using apt"
+            else
+                sudo apt install -y nvtop || error_exit "Failed to install nvtop using apt"
+            fi
+            ;;
+
+        *)
+            error_exit "Unsupported package manager for nvtop installation"
+            ;;
+    esac
+
+    # Verify installation
+    if command_exists nvtop; then
+        log "SUCCESS" "nvtop installed successfully"
+    else
+        error_exit "nvtop installation failed"
+    fi
+}
+
 
 main() {
     # Remove any existing apt update flag at the start
@@ -490,8 +638,9 @@ main() {
         "$(check_zsh_extensions_status)"
         "$(check_tmux_status)"
         "$(check_yazi_status)"
+        "$(check_go_status)"
+        "$(check_nvtop_status)"
     )
-
     # Debug: Print available options
     log "DEBUG" "Available options:"
     printf '%s\n' "${options[@]}"
@@ -540,6 +689,9 @@ main() {
     # Always set up zshrc after all components are installed
     if echo "$selected_options" | grep -qE "ZSH Shell|Starship Prompt|ZSH Extensions"; then
         setup_zshrc
+    fi
+    if echo "$selected_options" | grep -q "Go"; then
+       setup_go "$(echo "$selected_options" | grep -q "^${CHECK_MARK}" && echo true || echo false)"
     fi
 
     log "SUCCESS" "Setup complete! Please restart your shell for changes to take effect."

@@ -71,7 +71,6 @@ The following tools and packages are installed and configured by the script:
 ### Package Managers
 
 -   `apt` (Ubuntu)
--   `dnf` (Fedora)
 -   `brew` (macOS)
 
 ### Starship Presets
