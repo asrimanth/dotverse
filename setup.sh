@@ -572,10 +572,17 @@ setup_go() {
             # Install necessary tools and add Go repository
             install_package "software-properties-common" "$force_reinstall"
             if [ "$force_reinstall" = true ]; then
-                sudo add-apt-repository --remove ppa:longsleep/golang-backports || true
+                if is_root_user; then
+                    add-apt-repository --remove ppa:longsleep/golang-backports || true
+                else
+                    sudo add-apt-repository --remove ppa:longsleep/golang-backports || true
+                fi
             fi
-            sudo add-apt-repository ppa:longsleep/golang-backports -y || \
-                error_exit "Failed to add Go PPA repository"
+            if is_root_user; then
+                add-apt-repository ppa:longsleep/golang-backports -y || error_exit "Failed to add Go PPA repository"
+            else
+                sudo add-apt-repository ppa:longsleep/golang-backports -y || error_exit "Failed to add Go PPA repository"
+            fi
 
             update_package_manager
 
