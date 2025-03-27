@@ -1,0 +1,27 @@
+# Enable Starship
+eval "$(starship init zsh)"
+
+# Starship preset
+export STARSHIP_CONFIG=~/.config/starship/dev_runpod.toml
+
+# Source ZSH extensions
+source ~/.config/zsh/extensions/zsh-autosuggestions/zsh-autosuggestions.zsh
+source ~/.config/zsh/extensions/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh
+
+# Load plugins
+plugins=(
+    git
+    zsh-autosuggestions
+    zsh-syntax-highlighting
+)
+
+# Basic ZSH configuration
+HISTFILE=~/.zsh_history
+HISTSIZE=10000
+SAVEHIST=10000
+setopt appendhistory
+
+# Basic aliases
+alias ll='ls -la'
+alias la='ls -A'
+alias l='ls -CF'

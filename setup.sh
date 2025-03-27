@@ -33,7 +33,7 @@ readonly ZSH_SYNTAX_HIGHLIGHTING_URL="https://github.com/zsh-users/zsh-syntax-hi
 readonly YAZI_RELEASE_URL="https://github.com/sxyazi/yazi/releases/download/v0.4.2/yazi-x86_64-unknown-linux-gnu.zip"
 
 # Directory constants
-readonly ZSH_DIR="${HOME}/.zsh"
+readonly ZSH_DIR="${HOME}/.config/zsh/extensions"
 readonly STARSHIP_DIR="${HOME}/.config/starship"
 readonly CONFIG_DIR="${HOME}/.config"
 readonly YAZI_CONFIG_DIR="${CONFIG_DIR}/yazi"
@@ -503,8 +503,8 @@ eval "$(starship init zsh)"
 export STARSHIP_CONFIG=~/.config/starship/gruvbox-custom.toml
 
 # Source ZSH extensions
-source ~/.zsh/zsh-autosuggestions/zsh-autosuggestions.zsh
-source ~/.zsh/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh
+source ~/.config/zsh/extensions/zsh-autosuggestions/zsh-autosuggestions.zsh
+source ~/.config/zsh/extensions/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh
 
 # Load plugins
 plugins=(
