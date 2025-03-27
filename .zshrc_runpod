@@ -2,7 +2,7 @@
 eval "$(starship init zsh)"
 
 # Starship preset
-export STARSHIP_CONFIG=~/.config/starship/dev_runpod.toml
+export STARSHIP_CONFIG=/root/.config/starship/dev_runpod.toml
 
 # Source ZSH extensions
 source ~/.config/zsh/extensions/zsh-autosuggestions/zsh-autosuggestions.zsh
