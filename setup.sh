@@ -19,12 +19,12 @@ readonly STARSHIP_INSTALL_URL="https://starship.rs/install.sh"
 
 readonly STARSHIP_PRESET_URLS=(
     "https://starship.rs/presets/toml/gruvbox-rainbow.toml"
-    "https://starship.rs/presets/toml/tokyo-night.toml"
+    "https://starship.rs/presets/toml/rainbow_round_inverse_0.toml"
 )
 
 readonly STARSHIP_PRESET_NAMES=(
     "gruvbox-rainbow.toml"
-    "tokyo-night.toml"
+    "rainbow_round_inverse_0.toml"
 )
 
 # Repository URLs
@@ -499,6 +499,7 @@ setup_zshrc() {
     
     mkdir -p "${STARSHIP_DIR}"
     cp gruvbox-custom.toml "$STARSHIP_DIR"
+    cp starship_themes/rainbow_round_inverse_0.toml "$STARSHIP_DIR"
 
     backup_file "${HOME}/.zshrc"
     download_starship_presets
@@ -508,7 +509,7 @@ setup_zshrc() {
 eval "$(starship init zsh)"
 
 # Starship preset
-export STARSHIP_CONFIG=~/.config/starship/gruvbox-custom.toml
+export STARSHIP_CONFIG=~/.config/starship/rainbow_round_inverse_0.toml
 
 # Source ZSH extensions
 source ~/.config/zsh/extensions/zsh-autosuggestions/zsh-autosuggestions.zsh
